@@ -137,7 +137,9 @@ dsh web --patch runtime/cordis.yml --patch runtime/security.yml
 
 对外暴露必须走反向代理 + 鉴权，切勿直接绑 `0.0.0.0`；Nacos 生产绑内网 IP + 强口令；模型密钥走环境变量，勿入库。
 
-## 管控台功能
+## 管控台功能（可选模块）
+
+由 `apps/admin-server` + `apps/admin-web` 构成，**可选**——桥接插件不依赖它也能正常运行；它只是一个独立的 Web 界面，通过文件 IPC 与 bridge 交互，用于可视化与运维：
 
 - 总览 / 资产（MCP、A2A 启停）/ 同步
 - 联调（Agent 对话 + Nacos 注册检测）
@@ -146,6 +148,8 @@ dsh web --patch runtime/cordis.yml --patch runtime/security.yml
 - 调用日志 / 性能指标（TraceID + P50/P95/P99）
 - 审计 / 用户角色（admin / viewer）
 - Skill 与 cordis.yml 在线编辑
+
+> 管控台不属于核心约 540 行桥接的一部分，不启用也不影响桥接功能。
 
 ## 文档
 

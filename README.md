@@ -157,9 +157,9 @@ When exposing anything to a LAN or the internet, go through a reverse proxy with
 3. Lock down Nacos: bind to an internal IP, use a strong password, restrict by firewall
 4. Keep model keys (`DEEPSEEK_API_KEY`, …) in environment variables or a secret manager — never commit them
 
-## Operator console features
+## Operator console features *(optional module)*
 
-Built from `apps/admin-server` + `apps/admin-web`; talks to the bridge over file IPC:
+Built from `apps/admin-server` + `apps/admin-web`. **Optional** — the bridge plugin runs fine without it; this is just a standalone web UI that talks to the bridge over file IPC for visibility and ops:
 
 - **Overview** — mounted capabilities / sync dashboard
 - **Assets** — MCP / A2A list, enable & disable (removes tools without affecting the Nacos registration)
@@ -171,6 +171,8 @@ Built from `apps/admin-server` + `apps/admin-web`; talks to the bridge over file
 - **Call log / metrics** — full TraceID call logs + P50 / P95 / P99 latency
 - **Audit / System** — operation trail + user roles (admin / viewer)
 - **Skills / Config** — inline editing of SKILL.md and cordis.yml
+
+> Everything below this line is independent of the console — these features are **not** part of the core ~540-line bridge.
 
 ## Documentation
 
