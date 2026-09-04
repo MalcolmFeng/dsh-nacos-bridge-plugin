@@ -1,0 +1,81 @@
+# ============================================================
+# 生产安全配置（可选叠加层）
+# 部署到服务器时，用 --patch 叠加此文件，禁用高权限能力：
+#   dsh web --patch runtime/cordis.yml --patch runtime/security.yml
+#
+# 本文件不会默认启用（本地开发需要读盘/执行），由部署方显式叠加。
+#
+# 重要（v2 修复）：仅设 sandbox-policy read-only 不够——web 会话可通过
+# `permission` 插件的 preset（danger-full-access）覆盖会话级 sandbox，
+# 从而绕过只读并直接调用 shell。因此必须同时收紧 permission presets：
+#   1) 移除 danger-full-access / workspace-write
+#   2) defaultPreset 固定为 read-only
+# 这样会话无法再切到高权限模式。
+# ============================================================
+
+# ---- 1. 文件系统沙箱：强制只读（写入会被 sandbox 拒绝） ----
+- id: sandbox-policy
+  name: '@deepseek-ai/dsh-sandbox-policy'
+  config:
+    mode: read-only
+
+# ---- 2. 权限预设：只保留 read-only，移除 danger-full-access / workspace-write ----
+- id: permission
+  name: '@deepseek-ai/dsh-permission-presets'
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+    defaultPreset: read-only
+
+# ---- 2b. agent preset 指向仓库内置的安全副本（runtime/agent-presets），遮蔽 shipped 的 standard ----
+# shipped standard preset 在 agent-plane 装配了 tool-bash/tool-fs，host 层 patch 覆盖不到；
+# 因此用自定义 preset root（去掉了 shell/磁盘/网络工具）替代默认 standard。
+# 注意：agent-presets 的 roots 需要绝对路径；以下用启动时的工作目录（仓库根）拼出。
+- id: agent-presets
+  name: '@deepseek-ai/dsh-agent-presets'
+  config:
+    default: standard
+    roots:
+      - path: !!js "process.cwd() + '/runtime/agent-presets'"
+        trust: system
+    includeUserRoot: false
+
+# ---- 3. 禁用 shell 执行（模型无法运行任意命令） ----
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-bash-persistent
+  disabled: true
+- id: tool-pwsh-persistent
+  disabled: true
+- id: tool-terminal
+  disabled: true
+
+# ---- 4. 禁用文件系统读写（read/write/edit/glob/grep/str_replace） ----
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+
+# ---- 5. 禁用网络工具（阻止 Web 搜索/抓取） ----
+- id: tool-web
+  disabled: true
+
+# ---- 6. 禁用子代理 / 工作流 / 编排（防止绕过上层限制逃逸） ----
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-ralph
+  disabled: true

@@ -1,0 +1,21 @@
+{
+  "name": "dsh-nacos-bridge-admin",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "桥接层管控台后端：读 bridge 运行态（文件 IPC）+ 代理 Nacos + 联调",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node lib/index.js"
+  },
+  "dependencies": {
+    "dsh-nacos-bridge": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.0"
+  }
+}

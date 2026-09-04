@@ -1,0 +1,65 @@
+# dsh-nacos-bridge 装配示例：把 dsh（deepseek-harness）与 Nacos 能力发现桥接起来。
+# 在 dsh web/headless profile 之上以 --patch 叠加：
+#   dsh web --patch runtime/cordis.yml
+# 覆盖已有行：直接用相同 id 替换整行 config；新增行：放在 insert 列表里。
+
+# ---- 对话人格（覆盖 base 的 system-prompt 行，可按需改写） ----
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    persona: |-
+      你是统一业务助手。当前挂载的能力以工具形式提供，
+      每个工具的 name 与 description 说明了用途与调用方式。你根据用户意图，
+      从当前可用工具中选择最合适的能力调用，并以统一人格整合输出。
+
+      工具使用规范（常驻）：
+      - 工具名形如 mcp__<server>__<tool>（MCP 工具，任务型/异步成对 submit_*/query_*）
+        或 a2a__<agent>__chat（对话型智能体，可多轮保持上下文）。
+      - 调用前先读工具 description 确认用途与参数；请求缺失必要参数时，
+        向用户澄清，不要臆造参数。
+      - 工具返回的是中间数据，整合为自然语言结果后再回复，不透传原始 JSON。
+      - 涉及异步任务流转、对话型多轮会话、或多能力编排时，加载 central-dispatcher
+        手册（调用 skill 工具）按其规范流转；单工具的直接调用无需加载。
+
+# ---- 会话持久化（仓库内 runtime 目录，便于排查与清理；覆盖 base 的默认路径） ----
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js "'./runtime/.sessions'"
+
+# ---- 禁用 base 的默认技能扫描（避免暴露用户级技能），仅用下方隔离实例 ----
+- id: skill-filesystem
+  disabled: true
+
+- insert:
+
+    # ---- Skill：调度手册目录（隔离：不扫用户级 ~/.agents、~/.dsh） ----
+    - id: skill-filesystem-center
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: dsh-nacos-bridge-skills
+        includeDefaultRoots: false
+        customSkillDirs:
+          - !!js "'./skills'"
+        dshHome: !!js "'./runtime/.dsh-home'"
+        agentsHome: !!js "'./runtime/.agents-home'"
+
+    # ---- 核心插件：连 Nacos，发现 MCP server / Agent Card 并动态挂载 ----
+    # 能力提供方（外部 MCP server / A2A Agent）自行向 Nacos 注册，
+    # 此处只配置要从 Nacos 发现并挂载的名称。
+    - id: dsh-nacos-bridge-core
+      name: 'dsh-nacos-bridge'
+      config:
+        nacosAddr: !!js process.env.NACOS_SERVER_ADDR ?? 'http://127.0.0.1:8848'
+        username: !!js process.env.NACOS_USERNAME ?? 'nacos'
+        password: !!js process.env.NACOS_PASSWORD ?? 'nacos'
+        # 要发现的 MCP server 名称（注册在 Nacos AI Registry）
+        mcpNames:
+          - my-mcp-server
+        # 要发现的 A2A Agent Card 名称（对话型能力；留空则枚举全部）
+        agentNames:
+          - my-chat-agent
+        mcpTimeoutMs: 150000
+        a2aTimeoutMs: 240000
+
+

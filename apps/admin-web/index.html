@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>桥接层管控台 · dsh-nacos-bridge</title>
+<style>
+  :root {
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --surface-2: #faf9f7;
+    --border: #e9e6e0;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #8a857e;
+    --accent: #0f766e;
+    --accent-strong: #115e59;
+    --accent-soft: #e6f2f0;
+    --ok: #15803d; --ok-soft: #eaf6ee;
+    --warn: #b45309; --warn-soft: #fdf3e3;
+    --danger: #b91c1c; --danger-soft: #fdeeee;
+    --info: #1d4ed8; --info-soft: #e8effb;
+    --sidebar-bg: #13161b;
+    --sidebar-text: #9aa1ab;
+    --sidebar-muted: #5c636d;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 2px rgba(28, 25, 23, .05), 0 4px 12px rgba(28, 25, 23, .05);
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    font-size: 14px; height: 100%;
+    font-feature-settings: "tnum";
+  }
+  ::selection { background: var(--accent-soft); }
+
+  /* ── 布局：侧边栏 + 内容区 ── */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 224px; flex-shrink: 0; background: var(--sidebar-bg);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand { padding: 22px 22px 18px; }
+  .brand .name { color: #fff; font-size: 15px; font-weight: 650; letter-spacing: .02em; }
+  .brand .sub { color: var(--sidebar-muted); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; margin-top: 2px; }
+  #tabs { flex: 1; overflow-y: auto; padding: 4px 12px 16px; scrollbar-width: thin; }
+  .nav-label { color: var(--sidebar-muted); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; padding: 16px 10px 6px; }
+  #tabs button {
+    display: flex; align-items: center; gap: 9px;
+    width: 100%; background: none; border: none; cursor: pointer;
+    padding: 8px 10px; margin-bottom: 2px; border-radius: 7px;
+    color: var(--sidebar-text); font-size: 13px; font-family: inherit;
+    transition: background .15s, color .15s, transform .06s;
+    text-align: left;
+  }
+  #tabs button:hover { background: rgba(255,255,255,.06); color: #fff; }
+  #tabs button:active { transform: scale(.98); }
+  #tabs button.active { background: var(--accent); color: #fff; font-weight: 600; }
+  #tabs button .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .5; flex-shrink: 0; }
+  #tabs button.active .dot { opacity: 1; }
+  .sidebar-foot { padding: 14px 22px; color: var(--sidebar-muted); font-size: 11px; border-top: 1px solid rgba(255,255,255,.07); }
+
+  /* ── 内容区 ── */
+  main { flex: 1; padding: 32px 36px 60px; min-width: 0; }
+  .page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .page-head h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .page-head .crumb { color: var(--text-3); font-size: 12px; margin-top: 2px; }
+  .live-dot { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
+  .live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+
+  /* ── 指标卡 ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .card {
+    background: var(--surface); border-radius: var(--radius); padding: 18px 20px;
+    box-shadow: var(--shadow); border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .card:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(28,25,23,.06), 0 8px 20px rgba(28,25,23,.08); }
+  .card .num { font-size: 30px; font-weight: 700; letter-spacing: -.03em; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .card .num.accent2 { color: var(--info); }
+  .card .num.ok { color: var(--ok); }
+  .card .num.warn { color: var(--warn); }
+  .card .num.danger { color: var(--danger); }
+  .card .label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+
+  /* ── 面板 ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px; margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  .panel h2 { font-size: 14px; font-weight: 650; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); letter-spacing: -.01em; }
+  .panel h3 { font-size: 13px; font-weight: 650; margin: 16px 0 8px; color: var(--text-2); }
+  .panel .hint { color: var(--text-3); font-size: 12px; margin-bottom: 14px; }
+
+  /* ── 表格 ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--text-3); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: var(--surface-2); }
+  td code { font-variant-numeric: tabular-nums; }
+  .num-cell { font-variant-numeric: tabular-nums; }
+
+  code {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1px 6px; font-size: 12px; font-family: var(--font-mono);
+  }
+  pre {
+    background: #171a1f; color: #e6e8ec; padding: 14px; border-radius: 8px;
+    font-size: 12px; overflow-x: auto; font-family: var(--font-mono);
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* ── 状态标签 ── */
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; margin-right: 4px; }
+  .tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .tag-green { background: var(--ok-soft); color: var(--ok); }
+  .tag-blue { background: var(--info-soft); color: var(--info); }
+  .tag-purple { background: #f0ecf9; color: #6d4bb8; }
+  .tag-warn { background: var(--warn-soft); color: var(--warn); }
+  .tag-red { background: var(--danger-soft); color: var(--danger); }
+  .tag-gray { background: var(--surface-2); color: var(--text-3); }
+
+  /* ── 按钮 ── */
+  button.small, button.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    padding: 6px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 600; font-family: inherit;
+    transition: background .15s, transform .06s, box-shadow .15s;
+    margin-right: 6px;
+  }
+  button.small:hover { background: var(--accent-strong); }
+  button.small:active { transform: scale(.97); }
+  button.small:focus-visible, #tabs button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  button.danger { background: var(--danger); }
+  button.danger:hover { background: #991b1b; }
+  button.ghost { background: transparent; color: var(--text-2); border: 1px solid var(--border); }
+  button.ghost:hover { background: var(--surface-2); color: var(--text); }
+  button.small.primary { background: var(--accent); color: #fff; }
+  button.small.primary:hover { background: var(--accent-strong); }
+
+  /* ── 表单 ── */
+  input, select, textarea {
+    padding: 7px 11px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .row .fld { color: var(--text-3); font-size: 12px; }
+
+  /* ── 状态消息 ── */
+  .err { background: var(--danger-soft); color: var(--danger); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(185,28,28,.15); }
+  .ok { background: var(--ok-soft); color: var(--ok); padding: 12px 16px; border-radius: 8px; }
+  .empty { color: var(--text-3); padding: 40px; text-align: center; font-size: 13px; }
+  .muted { color: var(--text-3); font-size: 12px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; top: 20px; right: 20px; z-index: 100;
+    background: #1c1917; color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+    opacity: 0; transform: translateY(-8px); transition: opacity .25s, transform .25s;
+    max-width: 380px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--ok); }
+
+  /* ── 趋势条形图 ── */
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin-top: 8px; }
+  .bars .bar { flex: 1; background: linear-gradient(180deg, var(--accent), var(--accent-strong)); min-width: 6px; border-radius: 3px 3px 0 0; opacity: .85; transition: opacity .15s; }
+  .bars .bar:hover { opacity: 1; }
+  .trend-legend { color: var(--text-3); font-size: 11px; margin-top: 8px; font-family: var(--font-mono); }
+
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; height: auto; position: static; }
+    #tabs { display: flex; flex-wrap: wrap; padding: 8px; }
+    #tabs button { width: auto; }
+    .nav-label { display: none; }
+    .sidebar-foot { display: none; }
+    main { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand">
+    <div class="name">桥接层管控台</div>
+    <div class="sub">Nacos Bridge Console</div>
+  </div>
+  <nav id="tabs">
+    <div class="nav-label">监控</div>
+    <button data-tab="overview" class="active"><span class="dot"></span>总览</button>
+    <button data-tab="router"><span class="dot"></span>路由统计</button>
+    <button data-tab="metrics"><span class="dot"></span>性能指标</button>
+    <button data-tab="alert"><span class="dot"></span>告警</button>
+    <div class="nav-label">资源</div>
+    <button data-tab="assets"><span class="dot"></span>资产</button>
+    <button data-tab="sync"><span class="dot"></span>同步状态</button>
+    <button data-tab="calls"><span class="dot"></span>调用日志</button>
+    <div class="nav-label">治理</div>
+    <button data-tab="governance"><span class="dot"></span>流量治理</button>
+    <button data-tab="debug"><span class="dot"></span>联调</button>
+    <div class="nav-label">配置</div>
+    <button data-tab="skills"><span class="dot"></span>Skill</button>
+    <button data-tab="config"><span class="dot"></span>配置</button>
+    <button data-tab="audit"><span class="dot"></span>审计</button>
+    <button data-tab="system"><span class="dot"></span>系统</button>
+  </nav>
+  <div class="sidebar-foot"><span id="loaded-at">未连接</span></div>
+</aside>
+<main id="content"><div class="empty">加载中…</div></main>
+</div>
+
+<script>
+let STATE = null
+let activeTab = 'overview'
+const $ = (s) => document.querySelector(s)
+function el(t, c, x) { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e }
+function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML }
+function fmt(t) { return t ? new Date(t).toLocaleTimeString() : '-' }
+
+function toast(msg, type) {
+  const t = document.createElement('div')
+  t.className = 'toast' + (type === 'error' ? ' error' : type === 'success' ? ' success' : '')
+  t.textContent = msg
+  document.body.appendChild(t)
+  requestAnimationFrame(() => t.classList.add('show'))
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300) }, 3200)
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts)
+  const j = await r.json().catch(() => ({}))
+  return { status: r.status, ...j }
+}
+
+const PAGE_TITLES = {
+  overview: ['总览', '桥接层运行大盘'],
+  router: ['路由统计', '各能力调用分布与趋势'],
+  metrics: ['性能指标', 'P50 / P95 / P99 耗时与成功率'],
+  alert: ['告警', '阈值规则与告警记录'],
+  assets: ['资产', 'MCP 与对话 Agent 管理'],
+  sync: ['同步状态', 'Nacos → bridge 同步链路'],
+  calls: ['调用日志', '全链路 TraceID 调用记录'],
+  governance: ['流量治理', '熔断与限流规则'],
+  debug: ['联调', 'Agent 对话与连通性检测'],
+  skills: ['Skill', 'SKILL.md 在线编辑'],
+  config: ['配置', 'runtime/cordis.yml 编辑'],
+  audit: ['审计', '操作留痕'],
+  system: ['系统', '用户与角色'],
+}
+
+async function load() {
+  try {
+    const r = await api('/api/state')
+    STATE = r.error ? null : r
+    $('#loaded-at').textContent = STATE ? '已连接 · ' + new Date().toLocaleTimeString() : 'bridge 未运行'
+    render()
+  } catch (e) {
+    $('#loaded-at').textContent = '连接失败'
+    $('#content').innerHTML = `<div class="err">无法连接管理服务：${esc(e)}</div>`
+  }
+}
+
+function render() {
+  const tabs = { overview: renderOverview, assets: renderAssets, sync: renderSync, debug: renderDebug, governance: renderGovernance, calls: renderCalls, metrics: renderMetrics, router: renderRouter, alert: renderAlert, skills: renderSkills, config: renderConfig, audit: renderAudit, system: renderSystem }
+  const c = $('#content')
+  // 页头
+  const [title, crumb] = PAGE_TITLES[activeTab] || ['', '']
+  c.innerHTML = `<div class="page-head"><div><h1>${esc(title)}</h1><div class="crumb">${esc(crumb)}</div></div><span class="live-dot">实时刷新</span></div>`
+  ;(tabs[activeTab] || renderOverview)()
+}
+
+/* ── 总览 ── */
+function renderOverview() {
+  const c = $('#content')
+  if (!STATE) { c.innerHTML += '<div class="panel"><div class="err">bridge 未运行或状态未生成。请先启动 dsh（scripts/start.sh），等待首轮同步。</div></div>'; return }
+  const mcpTotal = (STATE.mcp || []).length
+  const a2aTotal = (STATE.a2a || []).length
+  const mcpOk = (STATE.mcp || []).filter((m) => m.url && m.enabled).length
+  const a2aOk = (STATE.a2a || []).filter((a) => a.url && a.enabled).length
+  const healthy = mcpOk + a2aOk
+  const total = mcpTotal + a2aTotal
+  const cards = el('div', 'cards')
+  const items = [
+    ['MCP 工具', mcpTotal + ' 个', ''],
+    ['对话 Agent', a2aTotal + ' 个', 'accent2'],
+    ['健康挂载', healthy + ' / ' + total, healthy === total && total > 0 ? 'ok' : 'warn'],
+    ['同步次数', STATE.sync.syncCount, ''],
+    ['同步失败', STATE.sync.syncFailCount, STATE.sync.syncFailCount > 0 ? 'danger' : 'ok'],
+    ['轮询间隔', (STATE.sync.pollIntervalMs / 1000) + 's', ''],
+  ]
+  for (const [k, v, cls] of items) {
+    const card = el('div', 'card'); card.appendChild(el('div', 'num ' + cls, v)); card.appendChild(el('div', 'label', k)); cards.appendChild(card)
+  }
+  c.appendChild(cards)
+  const p2 = el('div', 'panel')
+  p2.appendChild(el('h2', null, '接入能力'))
+  const t = document.createElement('table')
+  t.innerHTML = `<thead><tr><th>类型</th><th>名称</th><th>端点</th><th>状态</th></tr></thead>`
+  let rows = ''
+  for (const m of STATE.mcp || []) rows += `<tr><td><span class="tag tag-blue">MCP</span></td><td><code>${esc(m.name)}</code></td><td class="muted">${esc(m.url || '-')}</td><td>${m.enabled && m.url ? '<span class="tag tag-green">启用</span>' : '<span class="tag tag-red">停用</span>'}</td></tr>`
+  for (const a of STATE.a2a || []) rows += `<tr><td><span class="tag tag-purple">A2A</span></td><td><code>${esc(a.name)}</code></td><td class="muted">${esc(a.url || '-')}</td><td>${a.enabled && a.url ? '<span class="tag tag-green">启用</span>' : '<span class="tag tag-red">停用</span>'}</td></tr>`
+  t.innerHTML += `<tbody>${rows}</tbody>`
+  p2.appendChild(t); c.appendChild(p2)
+}
+
+/* ── 资产 ── */
+function renderAssets() {
+  const c = $('#content')
+  if (!STATE) { c.innerHTML += '<div class="panel"><div class="err">无运行态数据</div></div>'; return }
+  const renderList = (title, list, kind) => {
+    const p = el('div', 'panel')
+    p.appendChild(el('h2', null, title))
+    const t = document.createElement('table')
+    t.innerHTML = `<thead><tr><th>名称</th><th>端点</th><th>状态</th><th>操作</th></tr></thead><tbody></tbody>`
+    const tb = t.querySelector('tbody')
+    for (const it of list) {
+      const tr = document.createElement('tr')
+      tr.innerHTML = `<td><code>${esc(it.name)}</code></td><td class="muted">${esc(it.url || '-')}</td><td>${it.enabled && it.url ? '<span class="tag tag-green">启用</span>' : '<span class="tag tag-red">停用</span>'}</td><td></td>`
+      const td = tr.querySelector('td:last-child')
+      if (it.url) {
+        const btn = el('button', 'small ' + (it.enabled ? 'danger' : ''), it.enabled ? '停用' : '启用')
+        btn.onclick = async () => { const r = await api('/api/ctl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'enable', kind, name: it.name, enabled: !it.enabled }) }); toast(r.error || '指令已下发，bridge 下轮同步生效', r.error ? 'error' : 'success'); load() }
+        td.appendChild(btn)
+      }
+      tb.appendChild(tr)
+    }
+    p.appendChild(t)
+    return p
+  }
+  c.appendChild(renderList('MCP 资产（' + (STATE.mcp || []).length + '）', STATE.mcp || [], 'mcp'))
+  c.appendChild(renderList('对话 Agent 资产（' + (STATE.a2a || []).length + '）', STATE.a2a || [], 'a2a'))
+}
+
+/* ── 同步 ── */
+function renderSync() {
+  const c = $('#content')
+  if (!STATE) { c.innerHTML += '<div class="panel"><div class="err">无运行态数据</div></div>'; return }
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '同步状态'))
+  const t = document.createElement('table')
+  t.innerHTML = `<thead><tr><th></th><th></th></tr></thead><tbody>
+    <tr><th style="width:140px">最后同步</th><td>${fmt(STATE.sync.lastSyncAt)}</td></tr>
+    <tr><th>累计同步</th><td>${STATE.sync.syncCount} 次</td></tr>
+    <tr><th>同步失败</th><td class="num-cell">${STATE.sync.syncFailCount} 次</td></tr>
+    <tr><th>轮询间隔</th><td>${STATE.sync.pollIntervalMs / 1000}s</td></tr>
+    <tr><th>运行中</th><td>${STATE.sync.running ? '<span class="tag tag-green">是</span>' : '<span class="tag tag-red">否</span>'}</td></tr>
+  </tbody>`
+  p.appendChild(t)
+  const btn = el('button', 'small', '手动同步')
+  btn.style.marginTop = '12px'
+  btn.onclick = async () => { const r = await api('/api/ctl', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'sync' }) }); toast(r.error || '同步指令已下发', r.error ? 'error' : 'success'); load() }
+  p.appendChild(btn)
+  c.appendChild(p)
+}
+
+/* ── 联调 ── */
+function renderDebug() {
+  const c = $('#content')
+  if (!STATE) { c.innerHTML += '<div class="panel"><div class="err">无运行态数据</div></div>'; return }
+  const p1 = el('div', 'panel')
+  p1.appendChild(el('h2', null, 'Agent 对话联调'))
+  const r1 = el('div', 'row')
+  const sel = el('select', null)
+  for (const a of STATE.a2a || []) { const o = document.createElement('option'); o.value = a.name; o.textContent = a.name; sel.appendChild(o) }
+  r1.appendChild(el('span', 'fld', 'Agent')); r1.appendChild(sel)
+  const msg = el('input', null); msg.placeholder = '输入消息…'; msg.style.cssText = 'flex:1;'
+  r1.appendChild(msg)
+  const btn = el('button', 'small primary', '发送')
+  p1.appendChild(r1)
+  const out = el('pre', null); out.style.display = 'none'; p1.appendChild(out)
+  btn.onclick = async () => {
+    out.style.display = 'block'; out.textContent = '调用中…'
+    const r = await api('/api/debug/a2a', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: sel.value, message: msg.value }) })
+    out.textContent = r.error ? ('错误: ' + r.error) : (r.body || JSON.stringify(r, null, 2))
+  }
+  r1.appendChild(btn)
+  c.appendChild(p1)
+  const p2 = el('div', 'panel')
+  p2.appendChild(el('h2', null, '能力连通性（Nacos 注册状态）'))
+  const t2 = document.createElement('table')
+  t2.innerHTML = `<thead><tr><th>类型</th><th>名称</th><th>Nacos 注册</th></tr></thead><tbody></tbody>`
+  const tb = t2.querySelector('tbody')
+  const check = async (kind, name) => {
+    const r = await api('/api/nacos/' + (kind === 'mcp' ? 'mcp' : 'a2a') + '?name=' + encodeURIComponent(name))
+    const found = kind === 'mcp' ? r.server : r.card
+    return found ? '<span class="tag tag-green">已注册</span>' : '<span class="tag tag-red">未注册</span>'
+  }
+  ;(async () => {
+    for (const m of STATE.mcp || []) { const tr = document.createElement('tr'); tr.innerHTML = `<td><span class="tag tag-blue">MCP</span></td><td><code>${esc(m.name)}</code></td><td>${await check('mcp', m.name)}</td>`; tb.appendChild(tr) }
+    for (const a of STATE.a2a || []) { const tr = document.createElement('tr'); tr.innerHTML = `<td><span class="tag tag-purple">A2A</span></td><td><code>${esc(a.name)}</code></td><td>${await check('a2a', a.name)}</td>`; tb.appendChild(tr) }
+  })()
+  p2.appendChild(t2); c.appendChild(p2)
+}
+
+/* ── 调用日志 ── */
+async function renderCalls() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '调用链路日志'))
+  const refresh = el('button', 'small ghost', '刷新'); refresh.onclick = renderCalls
+  refresh.style.cssText = 'float:right;'; p.appendChild(refresh)
+  const filter = el('div', 'row')
+  const toolInput = el('input', null); toolInput.placeholder = '按工具名过滤（如 mcp__xxx__submit）…'
+  const okSel = el('select', null)
+  for (const [v, t] of [['', '全部状态'], ['true', '成功'], ['false', '失败']]) { const o = document.createElement('option'); o.value = v; o.textContent = t; okSel.appendChild(o) }
+  const apply = el('button', 'small', '查询')
+  filter.appendChild(el('span', 'fld', '工具')); filter.appendChild(toolInput)
+  filter.appendChild(el('span', 'fld', '状态')); filter.appendChild(okSel)
+  filter.appendChild(apply)
+  p.appendChild(filter)
+  const load = async () => {
+    const q = new URLSearchParams()
+    if (toolInput.value.trim()) q.set('tool', toolInput.value.trim())
+    if (okSel.value) q.set('ok', okSel.value)
+    const r = await api('/api/calls?' + q)
+    const calls = r.calls || []
+    const box = el('div', null)
+    if (!calls.length) { box.appendChild(el('div', 'empty', '暂无调用记录')); }
+    else {
+      const t = document.createElement('table')
+      t.innerHTML = `<thead><tr><th>时间</th><th>TraceID</th><th>工具</th><th>类型</th><th>状态</th><th>耗时</th><th>预览</th></tr></thead><tbody></tbody>`
+      const tb = t.querySelector('tbody')
+      for (const call of calls) {
+        const status = call.ok ? '<span class="tag tag-green">成功</span>' : '<span class="tag tag-red">失败</span>'
+        const tr = document.createElement('tr')
+        tr.innerHTML = `<td class="muted">${fmt(call.time)}</td><td><code>${esc(call.traceId || '-')}</code></td><td><code>${esc(call.tool)}</code></td><td>${call.kind === 'a2a' ? '<span class="tag tag-purple">A2A</span>' : '<span class="tag tag-blue">MCP</span>'}</td><td>${status}</td><td class="num-cell">${call.durationMs}ms</td><td class="muted">${esc((call.resultPreview || call.error || '').slice(0, 60))}</td>`
+        tb.appendChild(tr)
+      }
+      box.appendChild(t)
+    }
+    p.appendChild(box)
+    c.appendChild(p)
+  }
+  apply.onclick = load
+  await load()
+}
+
+/* ── 性能指标 ── */
+async function renderMetrics() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '性能指标（P50/P95/P99 耗时）'))
+  const refresh = el('button', 'small ghost', '刷新'); refresh.onclick = renderMetrics
+  refresh.style.cssText = 'float:right;'; p.appendChild(refresh)
+  const r = await api('/api/metrics')
+  const metrics = r.metrics || []
+  if (!metrics.length) { p.appendChild(el('div', 'empty', '暂无调用数据（工具被调用后显示）')); c.appendChild(p); return }
+  const t = document.createElement('table')
+  t.innerHTML = `<thead><tr><th>资源</th><th>调用量</th><th>成功率</th><th>P50</th><th>P95</th><th>P99</th><th>最大</th><th>熔断</th></tr></thead><tbody></tbody>`
+  const tb = t.querySelector('tbody')
+  for (const m of metrics) {
+    const rate = (1 - (m.errorRate || 0)) * 100
+    const rateColor = rate >= 90 ? 'var(--ok)' : rate >= 60 ? 'var(--warn)' : 'var(--danger)'
+    const circuit = m.circuitOpen ? '<span class="tag tag-red">熔断中</span>' : '<span class="tag tag-gray">正常</span>'
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td><code>${esc(m.name)}</code></td><td class="num-cell">${m.total}</td><td class="num-cell" style="color:${rateColor};font-weight:600">${rate.toFixed(1)}%</td><td class="num-cell">${m.p50}ms</td><td class="num-cell">${m.p95}ms</td><td class="num-cell">${m.p99}ms</td><td class="num-cell">${m.maxMs}ms</td><td>${circuit}</td>`
+    tb.appendChild(tr)
+  }
+  p.appendChild(t); c.appendChild(p)
+}
+
+/* ── 流量治理（熔断限流） ── */
+async function renderGovernance() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '熔断限流规则'))
+  p.appendChild(el('div', 'hint', '按资源名配置 QPS / 并发 / 熔断。target 支持前缀通配（如 mcp__my-server__*）。规则写入文件，bridge 下轮生效。'))
+  const r = await api('/api/governance')
+  const rules = r.rules || []
+  const box = el('div', null)
+  const addRow = (rule) => {
+    const row = el('div', 'row')
+    const tInput = el('input', null); tInput.placeholder = 'target（* 通配）'; tInput.value = rule.target || ''
+    const qInput = el('input', null); qInput.placeholder = 'QPS'; qInput.value = rule.qps || ''; qInput.style.width = '70px'
+    const cInput = el('input', null); cInput.placeholder = '并发'; cInput.value = rule.maxConcurrent || ''; cInput.style.width = '70px'
+    const eInput = el('input', null); eInput.placeholder = '熔断%'; eInput.value = rule.errorThreshold != null ? rule.errorThreshold * 100 : ''; eInput.style.width = '80px'
+    const del = el('button', 'small danger', '删除')
+    row.appendChild(el('span', 'fld', 'target')); row.appendChild(tInput)
+    row.appendChild(el('span', 'fld', 'QPS')); row.appendChild(qInput)
+    row.appendChild(el('span', 'fld', '并发')); row.appendChild(cInput)
+    row.appendChild(el('span', 'fld', '熔断%')); row.appendChild(eInput)
+    row.appendChild(del)
+    del.onclick = () => { row.remove() }
+    box.appendChild(row)
+  }
+  for (const rule of rules) addRow(rule)
+  if (!rules.length) addRow({ target: '', qps: '', maxConcurrent: '', errorThreshold: '' })
+  p.appendChild(box)
+  const save = el('button', 'small', '保存规则')
+  save.onclick = async () => {
+    const out = []
+    for (const row of box.children) {
+      const inputs = row.querySelectorAll('input')
+      const target = inputs[0].value.trim()
+      if (!target) continue
+      const rule = { target }
+      if (inputs[1].value) rule.qps = Number(inputs[1].value)
+      if (inputs[2].value) rule.maxConcurrent = Number(inputs[2].value)
+      if (inputs[3].value) rule.errorThreshold = Number(inputs[3].value) / 100
+      out.push(rule)
+    }
+    const r2 = await api('/api/governance', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rules: out }) })
+    toast(r2.error || '规则已保存，bridge 下轮生效', r2.error ? 'error' : 'success')
+  }
+  save.style.marginTop = '12px'
+  const addBtn = el('button', 'small ghost', '+ 添加规则')
+  addBtn.style.marginTop = '12px'
+  addBtn.onclick = () => addRow({})
+  p.appendChild(addBtn); p.appendChild(save)
+  c.appendChild(p)
+}
+
+/* ── 系统管理（用户角色） ── */
+async function renderSystem() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '用户与角色'))
+  p.appendChild(el('div', 'hint', 'admin = 可配置/启停，viewer = 只读（轻量权限，存于 runtime/users.json）'))
+  const r = await api('/api/users')
+  const users = r.users || []
+  const box = el('div', null)
+  const addRow = (u) => {
+    const row = el('div', 'row')
+    const nameInput = el('input', null); nameInput.value = u.name; nameInput.style.width = '140px'
+    const roleSel = el('select', null)
+    for (const [v, t] of [['admin', '管理员'], ['viewer', '只读']]) { const o = document.createElement('option'); o.value = v; o.textContent = t; if (u.role === v) o.selected = true; roleSel.appendChild(o) }
+    const del = el('button', 'small danger', '删除')
+    row.appendChild(el('span', 'fld', '用户')); row.appendChild(nameInput)
+    row.appendChild(el('span', 'fld', '角色')); row.appendChild(roleSel)
+    row.appendChild(del)
+    del.onclick = () => row.remove()
+    box.appendChild(row)
+  }
+  for (const u of users) addRow(u)
+  p.appendChild(box)
+  const save = el('button', 'small', '保存')
+  save.onclick = async () => {
+    const out = []
+    for (const row of box.children) {
+      const inputs = row.querySelectorAll('input')
+      const name = inputs[0].value.trim()
+      if (!name) continue
+      out.push({ name, role: row.querySelector('select').value })
+    }
+    const r2 = await api('/api/users', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ users: out }) })
+    toast(r2.error || '已保存', r2.error ? 'error' : 'success')
+  }
+  const addBtn = el('button', 'small ghost', '+ 添加用户')
+  addBtn.style.marginTop = '12px'
+  addBtn.onclick = () => addRow({ name: '', role: 'viewer' })
+  save.style.marginTop = '12px'
+  p.appendChild(addBtn); p.appendChild(save)
+  c.appendChild(p)
+}
+
+/* ── 审计 ── */
+async function renderAudit() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '操作审计'))
+  const refresh = el('button', 'small ghost', '刷新'); refresh.onclick = renderAudit
+  refresh.style.cssText = 'float:right;'; p.appendChild(refresh)
+  const r = await api('/api/audit')
+  const logs = r.logs || []
+  if (!logs.length) { p.appendChild(el('div', 'empty', '暂无操作记录')); c.appendChild(p); return }
+  const t = document.createElement('table')
+  t.innerHTML = `<thead><tr><th>时间</th><th>操作</th><th>详情</th><th>结果</th></tr></thead><tbody></tbody>`
+  const tb = t.querySelector('tbody')
+  for (const log of logs) {
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td class="muted">${fmt(log.time)}</td><td><code>${esc(log.op)}</code></td><td class="muted">${esc(JSON.stringify(log.detail))}</td><td>${log.ok ? '<span class="tag tag-green">成功</span>' : '<span class="tag tag-red">失败</span>'}</td>`
+    tb.appendChild(tr)
+  }
+  p.appendChild(t); c.appendChild(p)
+}
+
+/* ── Skill 管理 ── */
+async function renderSkills() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, 'Skill 管理'))
+  p.appendChild(el('div', 'hint', '编辑 skills/ 目录下的 SKILL.md。保存后重启 dsh 生效。'))
+  const r = await api('/api/skills')
+  const skills = r.skills || []
+  if (!skills.length) { p.appendChild(el('div', 'empty', '无 skill')); c.appendChild(p); return }
+  let current = skills[0].name
+  const selRow = el('div', 'row')
+  if (skills.length > 1) {
+    const sel = el('select', null)
+    for (const s of skills) { const o = document.createElement('option'); o.value = s.name; o.textContent = s.name; sel.appendChild(o) }
+    sel.onchange = () => { current = sel.value; loadSkill() }
+    selRow.appendChild(el('span', 'fld', 'Skill')); selRow.appendChild(sel)
+    p.appendChild(selRow)
+  }
+  const pathInfo = el('div', 'hint', skills[0].path)
+  p.appendChild(pathInfo)
+  const ta = el('textarea', null, '')
+  ta.style.cssText = 'width:100%;height:calc(100vh - 320px);min-height:420px;margin:10px 0;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;padding:14px;'
+  p.appendChild(ta)
+  const save = el('button', 'small', '保存')
+  save.onclick = async () => {
+    const r2 = await api('/api/skills/' + encodeURIComponent(current), { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: ta.value }) })
+    toast(r2.error || '已保存，重启 dsh 生效', r2.error ? 'error' : 'success')
+  }
+  p.appendChild(save)
+  c.appendChild(p)
+  async function loadSkill() {
+    const r2 = await api('/api/skills/' + encodeURIComponent(current))
+    if (r2.error) { toast(r2.error, 'error'); return }
+    pathInfo.textContent = r2.path
+    ta.value = r2.content || ''
+  }
+  await loadSkill()
+}
+
+/* ── Cordis 配置 ── */
+async function renderConfig() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, 'runtime/cordis.yml'))
+  p.appendChild(el('div', 'hint', '桥接层组合配置（persona / 插件树 / 能力名单）。保存后重启 dsh 生效。'))
+  const r = await api('/api/cordis')
+  const ta = el('textarea', null, r.content || '')
+  ta.style.cssText = 'width:100%;height:calc(100vh - 320px);min-height:420px;margin:10px 0;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;padding:14px;'
+  p.appendChild(ta)
+  const save = el('button', 'small', '保存配置')
+  save.onclick = async () => {
+    const r2 = await api('/api/cordis', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: ta.value }) })
+    toast(r2.error || '已保存，重启 dsh 生效', r2.error ? 'error' : 'success')
+  }
+  p.appendChild(save)
+  c.appendChild(p)
+}
+
+/* ── 路由命中统计 ── */
+async function renderRouter() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '路由命中统计'))
+  const refresh = el('button', 'small ghost', '刷新'); refresh.onclick = renderRouter
+  refresh.style.cssText = 'float:right;'; p.appendChild(refresh)
+  const r = await api('/api/router-stats')
+  const tools = r.tools || []
+  const trend = r.trend || []
+  if (!tools.length) { p.appendChild(el('div', 'empty', '暂无调用数据（工具被调用后显示）')); c.appendChild(p); return }
+  p.appendChild(el('div', 'hint', '总调用量: ' + r.total))
+  const t = document.createElement('table')
+  t.innerHTML = `<thead><tr><th>工具</th><th>调用量</th><th>成功率</th><th>平均耗时</th><th>最大耗时</th></tr></thead><tbody></tbody>`
+  const tb = t.querySelector('tbody')
+  for (const tool of tools) {
+    const rate = tool.successRate.toFixed(1)
+    const rateColor = rate >= 90 ? 'var(--ok)' : rate >= 60 ? 'var(--warn)' : 'var(--danger)'
+    const tr = document.createElement('tr')
+    tr.innerHTML = `<td><code>${esc(tool.name)}</code></td><td class="num-cell">${tool.total}</td><td class="num-cell" style="color:${rateColor};font-weight:600">${rate}%</td><td class="num-cell">${tool.avgMs}ms</td><td class="num-cell">${tool.maxMs}ms</td>`
+    tb.appendChild(tr)
+  }
+  p.appendChild(t)
+  if (trend.length) {
+    p.appendChild(el('h3', null, '调用量趋势（按小时）'))
+    const max = Math.max(...trend.map((x) => x.count))
+    const bars = el('div', 'bars')
+    for (const x of trend) {
+      const bar = el('div', 'bar')
+      bar.style.height = Math.max((x.count / max) * 100, 4) + '%'
+      bar.title = x.hour + ' ' + x.count + '次'
+      bars.appendChild(bar)
+    }
+    p.appendChild(bars)
+    p.appendChild(el('div', 'trend-legend', trend.map((x) => x.hour.slice(5) + ': ' + x.count).join('　')))
+  }
+  c.appendChild(p)
+}
+
+/* ── 告警中心 ── */
+async function renderAlert() {
+  const c = $('#content')
+  const p = el('div', 'panel')
+  p.appendChild(el('h2', null, '告警规则'))
+  p.appendChild(el('div', 'hint', '指标类型：errorRate（错误率%）/ syncFail（同步失败次数）/ circuit（熔断）/ p95（耗时ms）。webhook 可填钉钉/飞书/企微地址。'))
+  const r = await api('/api/alert/rules')
+  const rules = r.rules || []
+  const box = el('div', null)
+  const addRow = (rule) => {
+    const row = el('div', 'row')
+    const mSel = el('select', null)
+    for (const [v, t] of [['errorRate', '错误率'], ['syncFail', '同步失败'], ['circuit', '熔断'], ['p95', 'P95 耗时']]) {
+      const o = document.createElement('option'); o.value = v; o.textContent = t
+      if (rule.metric === v) o.selected = true
+      mSel.appendChild(o)
+    }
+    const tInput = el('input', null); tInput.placeholder = 'target（* 通配）'; tInput.value = rule.target || ''; tInput.style.width = '160px'
+    const thInput = el('input', null); thInput.placeholder = '阈值'; thInput.value = rule.threshold ?? ''; thInput.style.width = '80px'
+    const wInput = el('input', null); wInput.placeholder = 'webhook URL（可选）'; wInput.value = rule.webhook || ''; wInput.style.width = '240px'
+    const en = el('input', null); en.type = 'checkbox'; en.checked = rule.enabled !== false
+    const del = el('button', 'small danger', '删除')
+    row.appendChild(el('span', 'fld', '指标')); row.appendChild(mSel)
+    row.appendChild(el('span', 'fld', '目标')); row.appendChild(tInput)
+    row.appendChild(el('span', 'fld', '阈值')); row.appendChild(thInput)
+    row.appendChild(el('span', 'fld', '启用')); row.appendChild(en)
+    row.appendChild(wInput)
+    row.appendChild(del)
+    del.onclick = () => row.remove()
+    box.appendChild(row)
+  }
+  if (rules.length) rules.forEach(addRow); else addRow({ metric: 'errorRate', threshold: 50, enabled: true })
+  p.appendChild(box)
+  const save = el('button', 'small', '保存规则')
+  save.onclick = async () => {
+    const out = []
+    let idx = 0
+    for (const row of box.children) {
+      idx++
+      const mSel = row.querySelectorAll('select')[0]
+      const inputs = row.querySelectorAll('input')
+      if (!mSel) continue
+      const metric = mSel.value
+      if (!inputs[0].value.trim() && metric !== 'circuit' && metric !== 'syncFail') continue
+      const rule = { id: 'r' + Date.now() + idx, metric, enabled: inputs[3].checked }
+      if (inputs[0].value.trim()) rule.target = inputs[0].value.trim()
+      if (inputs[1].value) rule.threshold = Number(inputs[1].value)
+      if (inputs[2].value.trim()) rule.webhook = inputs[2].value.trim()
+      out.push(rule)
+    }
+    const r2 = await api('/api/alert/rules', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rules: out }) })
+    toast(r2.error || '规则已保存，bridge 下轮生效', r2.error ? 'error' : 'success')
+  }
+  const addBtn = el('button', 'small ghost', '+ 添加规则')
+  addBtn.style.marginTop = '12px'
+  addBtn.onclick = () => addRow({ enabled: true })
+  save.style.marginTop = '12px'
+  p.appendChild(addBtn); p.appendChild(save)
+  c.appendChild(p)
+  const p2 = el('div', 'panel')
+  p2.appendChild(el('h2', null, '告警记录'))
+  const r2 = await api('/api/alert/records')
+  const records = r2.records || []
+  if (!records.length) { p2.appendChild(el('div', 'empty', '暂无告警')); }
+  else {
+    const t = document.createElement('table')
+    t.innerHTML = `<thead><tr><th>时间</th><th>指标</th><th>目标</th><th>消息</th></tr></thead><tbody></tbody>`
+    const tb = t.querySelector('tbody')
+    for (const rec of records) {
+      const tr = document.createElement('tr')
+      tr.innerHTML = `<td class="muted">${fmt(rec.time)}</td><td><code>${esc(rec.metric)}</code></td><td><code>${esc(rec.target)}</code></td><td>${esc(rec.message)}</td>`
+      tb.appendChild(tr)
+    }
+    p2.appendChild(t)
+  }
+  c.appendChild(p2)
+}
+
+$('#tabs').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') return
+  activeTab = e.target.dataset.tab
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === e.target))
+  render()
+})
+
+setInterval(load, 15000)
+load()
+</script>
+</body>
+</html>
