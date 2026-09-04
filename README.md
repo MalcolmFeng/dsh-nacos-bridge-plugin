@@ -13,12 +13,14 @@ Capability providers (MCP servers / A2A agents)
         │  register themselves on startup
         ▼
 Nacos 3.2+  (AI resource control plane)
-        │  dsh-nacos-bridge connects & discovers
+        │  ★ dsh-nacos-bridge connects & discovers   ← this repo
         ▼
 dsh runtime  (deepseek-harness)
    ├── MCP server  →  mcp__<name>__*   tools (direct MCP SDK client)
    └── Agent Card  →  a2a__<name>__chat capabilities (multi-turn)
 ```
+
+★ = **this repository** — the only part you ship from here. Everything above/below it is external: providers register themselves, and `dsh` provides the runtime.
 
 Providers only need to register with Nacos. The plugin **reads** MCP / A2A registrations and mounts them as tools, so adding a capability = registering it in Nacos — **zero code changes**.
 

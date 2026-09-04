@@ -11,12 +11,14 @@
         │  启动时向 Nacos 注册
         ▼
 Nacos 3.2+（AI 资源控制平面）
-        │  dsh-nacos-bridge 连接并发现
+        │  ★ dsh-nacos-bridge 连接并发现   ← 本仓库
         ▼
 dsh 运行时（deepseek-harness）
    ├── MCP server → mcp__<name>__* 工具（MCP SDK Client 直连）
    └── Agent Card → a2a__<name>__chat 能力（多轮会话透传）
 ```
+
+★ = **本仓库**，是需要你从这里发布的唯一部分；上下两端均为外部：提供方自行注册，`dsh` 提供运行时。
 
 新增能力 = 注册到 Nacos，**零改代码**。
 
