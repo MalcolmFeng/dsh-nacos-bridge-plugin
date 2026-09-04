@@ -24,6 +24,25 @@ dsh runtime  (deepseek-harness)
 
 Providers only need to register with Nacos. The plugin **reads** MCP / A2A registrations and mounts them as tools, so adding a capability = registering it in Nacos — **zero code changes**.
 
+## Deliberately thin
+
+This project is not an agent framework — it is a ~540-line glue layer between Nacos and `dsh`. It has no UI, no database, no business logic of its own; it only **discovers and re-exposes** capabilities that already exist.
+
+Core glue code (`plugins/dsh-nacos-bridge/src`, net lines after comments/blank):
+
+| File | Lines | Role |
+|---|---|---|
+| `index.ts` | 39 | plugin entry |
+| `lifecycle.ts` | 219 | poll → diff → mount/unmount, health check |
+| `nacos-client.ts` | 137 | Nacos AI Registry HTTP client |
+| `mcp-client.ts` | 84 | MCP server → dsh tools |
+| `a2a-client.ts` | 45 | Agent Card → dsh A2A tool |
+| `types.ts` | 16 | shared types |
+| **core total** | **540** | |
+| `state/governance/call-log/alert.ts` | 425 | optional ops layer (file-IPC console support) |
+
+Everything `dsh` needs on top — model, memory, sessions, skills — is provided by `dsh`'s own plugins. If you strip the optional ops layer, the actual bridge is **~540 lines**. Adding a new capability to your AI platform means registering it in Nacos; there is nothing else to write.
+
 ## Repository layout
 
 ```

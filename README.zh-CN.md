@@ -22,6 +22,25 @@ dsh 运行时（deepseek-harness）
 
 新增能力 = 注册到 Nacos，**零改代码**。
 
+## 刻意做薄
+
+这不是一个 agent 框架，而是一条 **约 540 行的胶水层**，连接 Nacos 与 `dsh`。它没有自己的 UI、数据库、业务逻辑，只做一件事：**发现并重新暴露**已经存在的能力。
+
+核心胶水代码（`plugins/dsh-nacos-bridge/src`，去除注释与空行后的净行数）：
+
+| 文件 | 行数 | 职责 |
+|---|---|---|
+| `index.ts` | 39 | 插件入口 |
+| `lifecycle.ts` | 219 | 轮询 → diff 挂载/卸载 + 健康巡检 |
+| `nacos-client.ts` | 137 | Nacos AI Registry HTTP 客户端 |
+| `mcp-client.ts` | 84 | MCP server → dsh 工具 |
+| `a2a-client.ts` | 45 | Agent Card → dsh A2A 工具 |
+| `types.ts` | 16 | 共享类型 |
+| **核心合计** | **540** | |
+| `state/governance/call-log/alert.ts` | 425 | 可选运维层（管控台文件 IPC 支撑） |
+
+dsh 所需的其余能力——模型、记忆、会话、技能——都由 `dsh` 自带插件提供。去掉可选的运维层，真正的桥接只有 **约 540 行**。平台要接入新能力：在 Nacos 里注册即可，没有别的代码要写。
+
 ## 目录结构
 
 ```
