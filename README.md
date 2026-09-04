@@ -1,5 +1,7 @@
 # dsh-nacos-bridge
 
+**English** · [简体中文](README.zh-CN.md)
+
 A [deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) plugin that discovers **MCP servers** and **A2A Agent Cards** from a [Nacos](https://nacos.io/) AI Registry and mounts them as callable tools inside a `dsh` runtime.
 
 Skill / memory / session / multi-model behavior is handled by `dsh`'s native plugins — this repo only adds the *bridge*.
